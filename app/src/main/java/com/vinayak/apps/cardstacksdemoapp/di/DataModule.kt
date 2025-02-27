@@ -1,6 +1,8 @@
 package com.vinayak.apps.cardstacksdemoapp.di
 
 import android.content.Context
+import android.content.Context.MODE_PRIVATE
+import android.content.SharedPreferences
 import com.vinayak.apps.cardstacksdemoapp.data.NewsRepository
 import com.vinayak.apps.cardstacksdemoapp.data.local.NewsDao
 import com.vinayak.apps.cardstacksdemoapp.data.local.NewsDatabase
@@ -16,6 +18,8 @@ import javax.inject.Singleton
 @Module
 object DataModule {
 
+    const val PREF_NAME = "apipref"
+
     @Singleton
     @Provides
     fun provideDatabase(@ApplicationContext context: Context): NewsDatabase {
@@ -30,5 +34,11 @@ object DataModule {
     @Provides
     fun provideRepository(newsDao: NewsDao): NewsRepository {
         return NewsRepositoryImpl(newsDao)
+    }
+
+    @Singleton
+    @Provides
+    fun provideSharedPreference(@ApplicationContext applicationContext: Context) : SharedPreferences {
+        return applicationContext.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
     }
 }
