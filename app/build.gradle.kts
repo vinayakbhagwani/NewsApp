@@ -107,4 +107,9 @@ dependencies {
 
     implementation(libs.room.ktx)
     kapt(libs.room.compiler)
+
+    //work manager
+    implementation(libs.work.manager)
+    implementation(libs.work.manager.dagger)
+    kapt(libs.work.manager.dagger.kapt)
 }

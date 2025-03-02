@@ -3,6 +3,7 @@ package com.vinayak.apps.cardstacksdemoapp.di
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.SharedPreferences
+import androidx.work.WorkManager
 import com.vinayak.apps.cardstacksdemoapp.data.NewsRepository
 import com.vinayak.apps.cardstacksdemoapp.data.local.NewsDao
 import com.vinayak.apps.cardstacksdemoapp.data.local.NewsDatabase
@@ -32,13 +33,19 @@ object DataModule {
     }
 
     @Provides
-    fun provideRepository(newsDao: NewsDao): NewsRepository {
-        return NewsRepositoryImpl(newsDao)
+    fun provideRepository(newsDao: NewsDao, workManager: WorkManager): NewsRepository {
+        return NewsRepositoryImpl(newsDao, workManager)
     }
 
     @Singleton
     @Provides
     fun provideSharedPreference(@ApplicationContext applicationContext: Context) : SharedPreferences {
         return applicationContext.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+    }
+
+    @Provides
+    @Singleton
+    fun provideWorkManager(@ApplicationContext context: Context): WorkManager {
+        return WorkManager.getInstance(context)
     }
 }

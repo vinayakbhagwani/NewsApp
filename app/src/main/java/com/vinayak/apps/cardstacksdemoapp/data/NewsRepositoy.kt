@@ -10,4 +10,6 @@ interface NewsRepository {
     suspend fun deleteAll()
 
     fun getAllNewsList(): Flow<List<NewsEntity>>
+
+    fun setPeriodicWorkRequest()
 }

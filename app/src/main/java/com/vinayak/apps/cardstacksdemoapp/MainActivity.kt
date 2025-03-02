@@ -1,20 +1,27 @@
 package com.vinayak.apps.cardstacksdemoapp
 
 import android.annotation.SuppressLint
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.window.OnBackInvokedDispatcher
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -31,6 +38,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +59,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -84,13 +94,15 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-//    @Inject val newsRepo: NewsRepository
-//
-//    val viewModel = NewsListViewmodel(newsRepo)
+    @Inject
+    lateinit var sharedPreferences: SharedPreferences
+
+//    var isBackPressed: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
         setContent {
             CardStacksDemoAppTheme {
 
@@ -102,6 +114,12 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(true)
                 }
 
+                var tutorialVisible by remember {
+                    mutableStateOf(
+                        sharedPreferences.getBoolean("isTutorialVisible", true)
+                    )
+                }
+
                 var res = remember(response) {
                     response
                 }
@@ -110,8 +128,8 @@ class MainActivity : ComponentActivity() {
                     viewModel.fetchNews()
                 }
 
-                var startIndex = 0
-                var endIndex = 6
+//                var startIndex = 0
+//                var endIndex = 6
 
                 if(showLoader) {
                     Column(
@@ -138,35 +156,48 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     } else {
-                        val listNewsArticle = res.toMutableList().subList(startIndex,endIndex)
-//                            .map {
-//                            NewsArticle(
-//                                title = it.title ?: "ABC News",
-//                                image = it.urlToImage ?: "https://pixabay.com/get/g7f639a7757442d10d58effa2337306e1388ff115833ab318f29d6672eb3a09fe63013d34699e5f468ba90ddf5c34fd5e48f40a3d66fd62a9dc99e5269b702c52_1280.jpg",
-//                                description = it.description ?: "News Info",
-//                                newsUrl = it.url ?: "https://www.google.com"
-//                            )
-//                        }
+                        Log.d("Sp------a","start index: ${sharedPreferences.getInt("startIndex", 0)}")
+                        Log.d("Sp------a","end index: ${sharedPreferences.getInt("endIndex", 6)}")
+                        if(res.size <= sharedPreferences.getInt("endIndex", 6)) {
+                            sharedPreferences.edit().apply {
+                                putInt("startIndex", 0)
+                                apply()
+                                putInt("endIndex", 6)
+                                apply()
+                            }
+                        }
+
+                        val listNewsArticle = res.toMutableList().subList(
+                            sharedPreferences.getInt("startIndex", 0),
+                            sharedPreferences.getInt("endIndex", 6)
+                        )
+
+
                         MainFunction(
                             listNewsArticle = listNewsArticle,
                             onBackClick = {
 
                             },
                             addMoreNews = {
-                                startIndex = endIndex
-                                endIndex = startIndex+6
-                                if(res.size >= endIndex) {
-                                    res.toMutableList().subList(startIndex,endIndex)
-//                                        .map {
-//                                        NewsArticle(
-//                                            title = it.title ?: "ABC News",
-//                                            image = it.urlToImage ?: "https://pixabay.com/get/g7f639a7757442d10d58effa2337306e1388ff115833ab318f29d6672eb3a09fe63013d34699e5f468ba90ddf5c34fd5e48f40a3d66fd62a9dc99e5269b702c52_1280.jpg",
-//                                            description = it.description ?: "News Info",
-//                                            newsUrl = it.url ?: "https://www.google.com"
-//                                        )
-//                                    }
+                                sharedPreferences.edit().apply {
+                                    putInt("startIndex", sharedPreferences.getInt("endIndex", 0))
+                                    apply()
+                                    putInt("endIndex", sharedPreferences.getInt("startIndex", 0)+6)
+                                    apply()
+                                }
+//                                startIndex = endIndex
+//                                endIndex = startIndex+6
+                                Log.d("Response size: ","response size: ${res.size}")
+                                Log.d("Response size: ","end index: ${sharedPreferences.getInt("endIndex", 6)}")
+                                if(res.size >= sharedPreferences.getInt("endIndex", 6)) {
+                                    Log.d("Sp------b","start index: ${sharedPreferences.getInt("startIndex", 0)}")
+                                    Log.d("Sp------b","end index: ${sharedPreferences.getInt("endIndex", 6)}")
+                                    res.toMutableList().subList(
+                                        sharedPreferences.getInt("startIndex", 0),
+                                        sharedPreferences.getInt("endIndex", 6)
+                                    )
                                 } else {
-                                    val url = "https://pixabay.com/get/g05d3842e741e3acd2a7e3aa76a5e4a0f2bb366c94338638010a28261ae0861c18426dcbd0174a1f80318d4e786926d2f_1280.jpg"
+                                    val url = ""
                                     listOf(
                                         NewsArticle(
                                             title = "That's all, the\n\nNews for today,\n\nFolks .................☺\uFE0F",
@@ -178,11 +209,40 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
+
+                        if(tutorialVisible) {
+                            TutorialOverlayScreen(
+                                onDismiss = {
+                                    tutorialVisible = false
+                                    sharedPreferences.edit().apply {
+                                        putBoolean("isTutorialVisible", false)
+                                        apply()
+                                    }
+                                }
+                            )
+                        }
+
                     }
                 }
 
             }
         }
+    }
+
+//    override fun onBackPressed() {
+//        super.onBackPressed()
+//        isBackPressed = true
+//    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+//        if (!isBackPressed) {
+//            sharedPreferences.edit().apply {
+//                remove("startIndex")
+//                remove("endIndex")
+//                apply()
+//            }
+//        }
     }
 }
 
@@ -254,6 +314,72 @@ fun ExpandableText(
     }
 
 }
+
+@Composable
+fun TutorialOverlayScreen(onDismiss: () -> Unit) {
+    var step by remember { mutableStateOf(0) }
+    val transition = updateTransition(targetState = step, label = "Tutorial Steps")
+
+    val alpha by transition.animateFloat(
+        transitionSpec = { tween(durationMillis = 500) },
+        label = "Alpha Animation"
+    ) { if (it > 0) 1f else 0.8f }
+
+    val offset by transition.animateDp(
+        transitionSpec = { spring() },
+        label = "Offset Animation"
+    ) { if (it > 0) 0.dp else 60.dp }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f))
+            .clickable { onDismiss() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            AnimatedVisibility(visible = step == 0) {
+                Row {
+                    Text(
+                        text = "Swipe Left / Right to \nsee News Articles",
+                        textAlign = TextAlign.Center,
+                        fontSize = 20.sp,
+                        color = Color.White,
+                        modifier = Modifier
+//                            .offset(y = offset)
+                            .alpha(alpha)
+                    )
+                }
+            }
+
+            AnimatedVisibility(visible = step == 1) {
+                Text(
+                    text = "All set!!\nStart Exploring.\n",
+                    fontSize = 20.sp,
+                    color = Color.White,
+                    modifier = Modifier
+                        .offset(y = offset)
+                        .alpha(alpha)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = { if (step < 1) step++ else onDismiss() },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White)
+            ) {
+                Text(text = if (step < 1) "Next" else "Got it", color = Color.Black)
+            }
+        }
+    }
+}
+
 
 //private fun openUrlInChrome(url: String) {
 //
@@ -358,16 +484,6 @@ fun SwipeableCard(
     // 3D rotation factor: maps offsetX to -15° to 15° rotation
     var rotationYs = derivedStateOf { (offsetX.value / 10).coerceIn(-15f, 15f) }.value
 
-//    val gradients = listOf(
-//        listOf(Color(0x6AFFFFFF), Color(0x970E0101)), // Purple to Blue
-//        listOf(Color(0xFFFFA500), Color(0xFFFF4500)), // Orange to Red
-//        listOf(Color(0xFF36D1DC), Color(0xFF5B86E5)), // Cyan to Blue
-//        listOf(Color(0xFF11998E), Color(0xFF38EF7D)), // Green Gradient
-//        listOf(Color(0xFF830798), Color(0xFF710583)), // Purple to Blue
-//        listOf(Color(0xFFFFA500), Color(0xFFFF4500)), // Orange to Red
-//        listOf(Color(0xFF36D1DC), Color(0xFF5B86E5)), // Cyan to Blue
-//        listOf(Color(0xFF11998E), Color(0xFF38EF7D))
-//    )
     val gradients = listOf(
         listOf(Color(0x60B7E3EE), Color(0x6D230396)), // Purple to Blue
         listOf(Color(0x63EEB7B7), Color(0x60960303)), // Orange to Red
@@ -436,7 +552,7 @@ fun SwipeableCard(
             ShimmerEffect(modifier = if(isImageLoading)Modifier.fillMaxSize() else Modifier.size(0.dp))
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(cardImage)
+                    .data(if(cardImage.isNullOrBlank()) R.drawable.defaultimg else cardImage)
                     .crossfade(true)
                     .build(),
                 onLoading = {

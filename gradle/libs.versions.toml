@@ -30,6 +30,11 @@ dagger-hilt = { module = "com.google.dagger:hilt-android", version = "2.50" }
 dagger-kapt = { module = 'com.google.dagger:hilt-android-compiler', version = "2.50" }
 hilt-compose-navigation = { module = "androidx.hilt:hilt-navigation-compose", version = "1.2.0" }
 
+#work manager
+work-manager = { module = "androidx.work:work-runtime-ktx", version = "2.9.1" }
+work-manager-dagger = { module = "androidx.hilt:hilt-work", version = "1.2.0" }
+work-manager-dagger-kapt = { module = "androidx.hilt:hilt-compiler", version = "1.2.0" }
+
 #room-database
 room-ktx = { module = "androidx.room:room-ktx", version = "2.6.1" }
 room-compiler = { module = "androidx.room:room-compiler", version = "2.6.1" }

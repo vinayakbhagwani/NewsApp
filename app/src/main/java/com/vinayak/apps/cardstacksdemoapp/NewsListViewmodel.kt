@@ -23,7 +23,8 @@ import javax.inject.Inject
 @HiltViewModel
 class NewsListViewmodel @Inject constructor(
     val newsRepo: NewsRepository,
-    val sharedPreferences: SharedPreferences) : ViewModel() {
+    val sharedPreferences: SharedPreferences,
+    private val setupPeriodicWorkRequestUseCase: SetupPeriodicWorkRequestUseCase) : ViewModel() {
 
     val responseFlow = MutableStateFlow<List<NewsArticle>>(listOf())
     var job: Job? = null
@@ -85,6 +86,7 @@ class NewsListViewmodel @Inject constructor(
                                     apply()
                                 }
                                 newsRepo.insert(newEntityList)
+                                setupPeriodicWorkRequestUseCase.invoke()
                                 responseFlow.emit(newsArticleList)
                             } else {
                                 Log.e("API_ERROR", "Error: ${response.errorBody()?.string()}")
