@@ -1,56 +1,39 @@
 package com.vinayak.apps.cardstacksdemoapp
 
-import android.annotation.SuppressLint
 import android.content.SharedPreferences
-import android.net.Uri
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
-import android.window.OnBackInvokedDispatcher
 import androidx.activity.ComponentActivity
-import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedVisibility
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateDp
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.updateTransition
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,17 +42,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -77,18 +52,25 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import com.vinayak.apps.cardstacksdemoapp.data.NewsRepository
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.amplitude.core.Amplitude
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.vinayak.apps.cardstacksdemoapp.compose.SwipeableCard
+import com.vinayak.apps.cardstacksdemoapp.compose.TutorialOverlayScreen
 import com.vinayak.apps.cardstacksdemoapp.models.NewsArticle
 import com.vinayak.apps.cardstacksdemoapp.ui.theme.CardStacksDemoAppTheme
+import com.vinayak.apps.cardstacksdemoapp.utils.FontUtils
+import com.vinayak.apps.cardstacksdemoapp.utils.LocationUtils.areLocationPermissionsAlreadyGranted
+import com.vinayak.apps.cardstacksdemoapp.utils.LocationUtils.decideCurrentPermissionStatus
+import com.vinayak.apps.cardstacksdemoapp.utils.LocationUtils.openApplicationSettings
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
-import java.util.UUID
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -96,6 +78,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var sharedPreferences: SharedPreferences
+
+    @Inject
+    lateinit var fusedLocatiionProviderClient: FusedLocationProviderClient
 
 //    var isBackPressed: Boolean = false
 
@@ -124,12 +109,71 @@ class MainActivity : ComponentActivity() {
                     response
                 }
 
+                var locationPermissionsGranted by remember { mutableStateOf(areLocationPermissionsAlreadyGranted(
+                    context = baseContext)) }
+                var shouldShowPermissionRationale by remember {
+                    mutableStateOf(
+                        shouldShowRequestPermissionRationale(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                    )
+                }
+
+                var shouldDirectUserToApplicationSettings by remember {
+                    mutableStateOf(false)
+                }
+
+                var currentPermissionsStatus by remember {
+                    mutableStateOf(decideCurrentPermissionStatus(locationPermissionsGranted, shouldShowPermissionRationale))
+                }
+
+                val locationPermissions = arrayOf(
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+
+                val locationPermissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestMultiplePermissions(),
+                    onResult = { permissions ->
+                        locationPermissionsGranted = permissions.values.reduce { acc, isPermissionGranted ->
+                            acc && isPermissionGranted
+                        }
+
+                        if (!locationPermissionsGranted) {
+                            shouldShowPermissionRationale =
+                                shouldShowRequestPermissionRationale(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                        }
+                        shouldDirectUserToApplicationSettings = !shouldShowPermissionRationale && !locationPermissionsGranted
+                        currentPermissionsStatus = decideCurrentPermissionStatus(locationPermissionsGranted, shouldShowPermissionRationale)
+                    })
+
+                val lifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(key1 = lifecycleOwner, effect = {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_START &&
+                            !locationPermissionsGranted &&
+                            !shouldShowPermissionRationale) {
+                            locationPermissionLauncher.launch(locationPermissions)
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose {
+                        lifecycleOwner.lifecycle.removeObserver(observer)
+                    }
+                }
+                )
+
+                if(locationPermissionsGranted) {
+                    if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+                        ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        fusedLocatiionProviderClient.lastLocation
+                            .addOnSuccessListener { location ->
+                                viewModel.getCountryInfo(context = baseContext,location)
+                            }
+                    }
+                }
+
                 LaunchedEffect(Unit) {
                     viewModel.fetchNews()
                 }
-
-//                var startIndex = 0
-//                var endIndex = 6
 
                 if(showLoader) {
                     Column(
@@ -175,6 +219,8 @@ class MainActivity : ComponentActivity() {
 
                         MainFunction(
                             listNewsArticle = listNewsArticle,
+                            shouldShowPermissionRationale = shouldShowPermissionRationale,
+                            shouldDirectUserToApplicationSettings = shouldDirectUserToApplicationSettings,
                             onBackClick = {
 
                             },
@@ -185,8 +231,6 @@ class MainActivity : ComponentActivity() {
                                     putInt("endIndex", sharedPreferences.getInt("startIndex", 0)+6)
                                     apply()
                                 }
-//                                startIndex = endIndex
-//                                endIndex = startIndex+6
                                 Log.d("Response size: ","response size: ${res.size}")
                                 Log.d("Response size: ","end index: ${sharedPreferences.getInt("endIndex", 6)}")
                                 if(res.size >= sharedPreferences.getInt("endIndex", 6)) {
@@ -207,6 +251,12 @@ class MainActivity : ComponentActivity() {
                                         )
                                     )
                                 }
+                            },
+                            onLaunchingPermissionLauncher = {
+                                locationPermissionLauncher.launch(locationPermissions)
+                            },
+                            onSnackbarDismiss = {
+                                shouldShowPermissionRationale = false
                             }
                         )
 
@@ -227,22 +277,6 @@ class MainActivity : ComponentActivity() {
 
             }
         }
-    }
-
-//    override fun onBackPressed() {
-//        super.onBackPressed()
-//        isBackPressed = true
-//    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-//        if (!isBackPressed) {
-//            sharedPreferences.edit().apply {
-//                remove("startIndex")
-//                remove("endIndex")
-//                apply()
-//            }
-//        }
     }
 }
 
@@ -270,7 +304,6 @@ fun ExpandableText(
 
     Box(modifier = Modifier
         .clickable(clickable) {
-//            isExpanded = !isExpanded
             if (!isExpanded) {
                 isExpanded = true
             } else {
@@ -315,117 +348,42 @@ fun ExpandableText(
 
 }
 
-@Composable
-fun TutorialOverlayScreen(onDismiss: () -> Unit) {
-    var step by remember { mutableStateOf(0) }
-    val transition = updateTransition(targetState = step, label = "Tutorial Steps")
-
-    val alpha by transition.animateFloat(
-        transitionSpec = { tween(durationMillis = 500) },
-        label = "Alpha Animation"
-    ) { if (it > 0) 1f else 0.8f }
-
-    val offset by transition.animateDp(
-        transitionSpec = { spring() },
-        label = "Offset Animation"
-    ) { if (it > 0) 0.dp else 60.dp }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.7f))
-            .clickable { onDismiss() }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            AnimatedVisibility(visible = step == 0) {
-                Row {
-                    Text(
-                        text = "Swipe Left / Right to \nsee News Articles",
-                        textAlign = TextAlign.Center,
-                        fontSize = 20.sp,
-                        color = Color.White,
-                        modifier = Modifier
-//                            .offset(y = offset)
-                            .alpha(alpha)
-                    )
-                }
-            }
-
-            AnimatedVisibility(visible = step == 1) {
-                Text(
-                    text = "All set!!\nStart Exploring.\n",
-                    fontSize = 20.sp,
-                    color = Color.White,
-                    modifier = Modifier
-                        .offset(y = offset)
-                        .alpha(alpha)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Button(
-                onClick = { if (step < 1) step++ else onDismiss() },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White)
-            ) {
-                Text(text = if (step < 1) "Next" else "Got it", color = Color.Black)
-            }
-        }
-    }
-}
-
-
-//private fun openUrlInChrome(url: String) {
-//
-//    val packageManager =
-//    val parkingUUID = UUID.randomUUID()
-//    val chromeIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-//    chromeIntent.putExtra(Intent.EXTRA_REFERRER, Uri.parse("android-app://com.android.chrome"))
-//
-//
-//
-//    // Check if Chrome is installed
-//    if (isPackageInstalled("com.android.chrome", packageManager)) {
-//        chromeIntent.setPackage("com.android.chrome")
-//    }
-//
-//    // If Chrome is installed, open the URL in Chrome
-//    try {
-//        startActivity(chromeIntent)
-//    } catch (e: Exception) {
-//        // If Chrome is not installed, open the URL in the default browser
-//        Toast.makeText(
-//            this,
-//            "Chrome not installed, opening in default browser",
-//            Toast.LENGTH_SHORT
-//        ).show()
-//        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-//    }
-//}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainFunction(
     listNewsArticle: List<NewsArticle>,
+    shouldShowPermissionRationale: Boolean,
+    shouldDirectUserToApplicationSettings: Boolean,
     onBackClick: () -> Unit ={},
-    addMoreNews: () -> List<NewsArticle> = {  -> emptyList() }
+    addMoreNews: () -> List<NewsArticle> = {  -> emptyList() },
+    onSnackbarDismiss: () -> Unit ={},
+    onLaunchingPermissionLauncher: () -> Unit ={}
 ) {
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         Scaffold(
+            snackbarHost = {
+                SnackbarHost(hostState = snackbarHostState)
+            },
             containerColor = Color.White,
             topBar = {
                 CenterAlignedTopAppBar(
                     modifier = Modifier.height(94.dp),
-                    title = { Text(text = "Daily Digest", modifier = Modifier.padding(top=22.dp)) },
+                    title = {
+                        Text(
+                            text = "Snip.itt",
+                            fontSize = 29.sp,
+                            fontFamily = FontUtils.fontFamily,
+                            modifier = Modifier.padding(bottom = 10.dp, top = 5.dp),
+                            fontWeight = FontWeight.Bold,
+                            fontStyle = FontStyle.Italic
+                        )
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Black, // Set the background color
                         titleContentColor = Color.White // Set the title color
@@ -442,6 +400,32 @@ fun MainFunction(
                 )
             },
             content = { paddingValues ->
+
+                if (shouldShowPermissionRationale) {
+                    LaunchedEffect(Unit) {
+                        scope.launch {
+                            val userAction = snackbarHostState.showSnackbar(
+                                message ="Please approve location permiss ions to show you news from your region",
+                                actionLabel = "Approve",
+                                duration = SnackbarDuration.Indefinite,
+                                withDismissAction = true
+                            )
+                            when (userAction) {
+                                SnackbarResult.ActionPerformed -> {
+                                    onSnackbarDismiss()
+                                    onLaunchingPermissionLauncher()
+                                }
+                                SnackbarResult.Dismissed -> {
+                                    onSnackbarDismiss()
+                                }
+                            }
+                        }
+                    }
+                }
+                if (shouldDirectUserToApplicationSettings) {
+                    openApplicationSettings(packageName = LocalContext.current.packageName,LocalContext.current)
+                }
+
                 Box(modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)){
@@ -461,207 +445,6 @@ fun MainFunction(
     }
 }
 
-
-@SuppressLint("UnrememberedMutableState")
-@Composable
-fun SwipeableCard(
-    cardText: String,
-    cardImage: String,
-    cardDescription: String,
-    cardNewsUrl: String,
-    cardIndex: Int,
-    cardOffset: Dp,
-    cardScale: Float,
-    onSwiped: () -> Unit
-) {
-    Log.d("CARD_DET","card details: ${cardText} || ${cardImage}")
-    val offsetX = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    var isImageLoading by remember {
-        mutableStateOf(false)
-    }
-
-    // 3D rotation factor: maps offsetX to -15° to 15° rotation
-    var rotationYs = derivedStateOf { (offsetX.value / 10).coerceIn(-15f, 15f) }.value
-
-    val gradients = listOf(
-        listOf(Color(0x60B7E3EE), Color(0x6D230396)), // Purple to Blue
-        listOf(Color(0x63EEB7B7), Color(0x60960303)), // Orange to Red
-        listOf(Color(0x63B7EECB), Color(0x5E5E9603)), // Cyan to Blue
-        listOf(Color(0x63B7CBEE), Color(0x79032396)), // Green Gradient
-        listOf(Color(0x63EEC4B7), Color(0x79963E03)), // Purple to Blue
-        listOf(Color(0x63B7EEE6), Color(0x8D03968A)), // Orange to Red
-        listOf(Color(0x63D3B7EE), Color(0x772F0396)), // Cyan to Blue
-        listOf(Color(0x63EEB7DE), Color(0x74960387))
-    )
-
-    val cardGradient = gradients[cardIndex % gradients.size]
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth(0.95f)
-            .fillMaxHeight(0.95f)
-            .padding(16.dp)
-            .offset(y = cardOffset) // Stack effect
-            .graphicsLayer {
-                translationX = offsetX.value
-                scaleX = cardScale
-                scaleY = cardScale
-                rotationY = rotationYs // 3D rotation effect
-                cameraDistance = 12 * density // Enhance 3D perspective
-            }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        when {
-                            offsetX.value > 300f -> { // Swipe Right
-                                scope.launch {
-                                    offsetX.animateTo(1000f, tween(300))
-                                    onSwiped()
-                                }
-                            }
-
-                            offsetX.value < -300f -> { // Swipe Left
-                                scope.launch {
-                                    offsetX.animateTo(-1000f, tween(300))
-                                    onSwiped()
-                                }
-                            }
-
-                            else -> { // Reset if not enough swipe
-                                scope.launch { offsetX.animateTo(0f, tween(300)) }
-                            }
-                        }
-                    },
-                    onHorizontalDrag = { _, dragAmount ->
-                        scope.launch { offsetX.snapTo(offsetX.value + dragAmount) }
-                    }
-                )
-            }
-            .shadow(10.dp, RoundedCornerShape(16.dp))
-            .background(
-                brush = Brush.linearGradient(
-                    colors = cardGradient,
-                    start = Offset(0f, 0f),
-                    end = Offset(800f, 1000f)
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-            ShimmerEffect(modifier = if(isImageLoading)Modifier.fillMaxSize() else Modifier.size(0.dp))
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(if(cardImage.isNullOrBlank()) R.drawable.defaultimg else cardImage)
-                    .crossfade(true)
-                    .build(),
-                onLoading = {
-                    isImageLoading = true
-                },
-                onSuccess = {
-                    isImageLoading = false
-                },
-                onError = {
-                    isImageLoading = false
-                },
-                contentDescription = stringResource(R.string.app_name),
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-//        }
-
-        Column(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = cardGradient,
-                        start = Offset(0f, 0f),
-                        end = Offset(700f, 700f)
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ),
-            verticalArrangement = Arrangement.Bottom
-        ) {
-            Row {
-//                VerticalDivider(
-//                    modifier = Modifier
-//                        .height(50.dp)
-//                        .width(5.dp)
-//                        .padding(horizontal = 15.dp, vertical = 35.dp),
-//                    color = Color.White
-//                )
-                Text(
-                    modifier = Modifier.padding(horizontal = 15.dp, vertical = 0.dp),
-                    text = cardText,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-            ExpandableText(
-                modifier = Modifier
-                    .padding(horizontal = 15.dp, vertical = 9.dp),
-                style = TextStyle(
-                    fontStyle = FontStyle.Italic,
-                    fontSize = 17.sp
-                ),
-                text = cardDescription,
-                newsUrl = cardNewsUrl
-            )
-        }
-    }
-}
-
-@Composable
-fun ShimmerEffect(
-    modifier: Modifier,
-    widthOfShadowBrush: Int = 500,
-    angleOfAxisY: Float = 270f,
-    durationMillis: Int = 1000,
-) {
-
-
-    val shimmerColors = listOf(
-        Color.White.copy(alpha = 0.3f),
-        Color.White.copy(alpha = 0.5f),
-        Color.White.copy(alpha = 1.0f),
-        Color.White.copy(alpha = 0.5f),
-        Color.White.copy(alpha = 0.3f),
-    )
-
-    val transition = rememberInfiniteTransition(label = "")
-
-    val translateAnimation = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = (durationMillis + widthOfShadowBrush).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = durationMillis,
-                easing = LinearEasing,
-            ),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "Shimmer loading animation",
-    )
-
-    val brush = Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset(x = translateAnimation.value - widthOfShadowBrush, y = 0.0f),
-        end = Offset(x = translateAnimation.value, y = angleOfAxisY),
-    )
-
-    Box(
-        modifier = modifier
-    ) {
-        Spacer(
-            modifier = Modifier
-                .matchParentSize()
-                .background(brush)
-        )
-    }
-}
-
 @Composable
 fun SwipeableCardStack(
     listNewsArticle: List<NewsArticle>,
@@ -671,19 +454,14 @@ fun SwipeableCardStack(
 
     LaunchedEffect(newsList.size) {
         if(newsList.isEmpty()) {
-            Log.d("NewsList","NewsList size: ${newsList.size}")
-            if(addMoreNews().size>0) newsList.addAll(addMoreNews())
+            if(addMoreNews().isNotEmpty()) newsList.addAll(addMoreNews())
         }
-//        if (newsList.isEmpty()) {
-//            newsList.addAll(listNewsArticle) // Reset cards when all are swiped
-//        }
     }
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         newsList.forEachIndexed { index, news ->
             val cardOffset = 10.dp // Offset each card slightly
             val cardScale = 1f // Decrease scale for background cards
-
 
             SwipeableCard(
                 cardText = news.title,

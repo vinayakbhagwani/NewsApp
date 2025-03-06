@@ -35,7 +35,7 @@ class NewsRepositoryImpl(
             .build()
         val workRequest = PeriodicWorkRequest.Builder(
             NotificationWorker::class.java,
-            15,
+            240,
             TimeUnit.MINUTES
         )
             .setConstraints(constraints)

@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">CardStacksDemoApp</string>
+<!--    <string-array name="certs">-->
+<!--        <item>5825f7b9327e83597d73f2bbcde20249f8712b98c9ef7762d154a01a47cce679</item>-->
+<!--    </string-array>-->
+
 </resources>

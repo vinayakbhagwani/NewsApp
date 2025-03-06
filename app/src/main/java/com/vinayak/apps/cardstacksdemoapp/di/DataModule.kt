@@ -4,6 +4,12 @@ import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.SharedPreferences
 import androidx.work.WorkManager
+import com.amplitude.android.Configuration
+import com.amplitude.android.DefaultTrackingOptions
+import com.amplitude.android.autocaptureOptions
+import com.amplitude.core.Amplitude
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import com.vinayak.apps.cardstacksdemoapp.data.NewsRepository
 import com.vinayak.apps.cardstacksdemoapp.data.local.NewsDao
 import com.vinayak.apps.cardstacksdemoapp.data.local.NewsDatabase
@@ -47,5 +53,27 @@ object DataModule {
     @Singleton
     fun provideWorkManager(@ApplicationContext context: Context): WorkManager {
         return WorkManager.getInstance(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideFusedLocationProviderClient(@ApplicationContext context: Context): FusedLocationProviderClient {
+        return LocationServices.getFusedLocationProviderClient(context)
+    }
+    @Provides
+    @Singleton
+    fun providesAmplitudeInstance(@ApplicationContext context: Context): Amplitude {
+        return Amplitude(
+            Configuration(
+                apiKey = "bfb7ba0a241de2f310bcf0e9fd5c1fb7",
+                context = context,
+                autocapture = autocaptureOptions {
+                    +sessions               // or `+AutocaptureOption.SESSIONS`
+                    +appLifecycles          // or `+AutocaptureOption.APP_LIFECYCLES`
+                    +deepLinks              // or `+AutocaptureOption.DEEP_LINKS`
+                    +screenViews            // or `+AutocaptureOption.SCREEN_VIEWS`
+                }
+            )
+        )
     }
 }

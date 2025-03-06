@@ -1,9 +1,15 @@
 package com.vinayak.apps.cardstacksdemoapp
 
+import android.content.Context
 import android.content.SharedPreferences
+import android.location.Address
+import android.location.Geocoder
+import android.location.Location
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.amplitude.core.Amplitude
 import com.vinayak.apps.cardstacksdemoapp.data.NewsRepository
 import com.vinayak.apps.cardstacksdemoapp.data.RetrofitInstance
 import com.vinayak.apps.cardstacksdemoapp.data.local.NewsEntity
@@ -18,6 +24,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -28,6 +36,9 @@ class NewsListViewmodel @Inject constructor(
 
     val responseFlow = MutableStateFlow<List<NewsArticle>>(listOf())
     var job: Job? = null
+
+    @Inject
+    lateinit var amplitude: Amplitude
 
     val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
         Log.e("API_ERROR", "Error occurred: ${throwable.localizedMessage}")
@@ -41,7 +52,7 @@ class NewsListViewmodel @Inject constructor(
                         if(verifyIfDbDeleteRequired(sharedPreferences) >= TOTAL_MINUTES) {
                             newsRepo.deleteAll()
                             sharedPreferences.edit().apply {
-                                clear()
+                                remove(Helpers.API_TIME)
                                 apply()
                             }
                         } else {
@@ -54,6 +65,7 @@ class NewsListViewmodel @Inject constructor(
                                 )
                             }
                             responseFlow.emit(newsArticleList)
+                            amplitude.track("DB_CALL_SUCCESSFUL")
                             if (job?.isActive == true) job?.cancel()
                         }
                     } else {
@@ -73,6 +85,9 @@ class NewsListViewmodel @Inject constructor(
                                         )
                                     }
                                 } ?: listOf()
+
+                                amplitude.track("API_CALL_SUCCESSFUL")
+
                                 val newEntityList = newsArticleList.map {
                                     NewsEntity(
                                         title = it.title,
@@ -98,6 +113,20 @@ class NewsListViewmodel @Inject constructor(
             } catch (e: Exception) {
                 Log.e("_ERROR", "Exception: ${e.localizedMessage}")
             }
+        }
+    }
+
+    fun getCountryInfo(context: Context, location: Location) {
+        val geocoder = Geocoder(context, Locale.getDefault())
+        try {
+            val addresses: List<Address>? = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+            if (!addresses.isNullOrEmpty()) {
+                val countryName = addresses[0].countryName
+                val countryCode = addresses[0].countryCode
+                Log.d("UserCountry", "Country: $countryName ($countryCode)")
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
         }
     }
 }
