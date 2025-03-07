@@ -3,25 +3,25 @@
 
 ## Features:
 
-# Intuitive Swipeable News Articles
+Intuitive Swipeable News Articles
 
-# API integration with exception handling
+API integration with exception handling
 
-# DB integration
+DB integration
 
-# Pagination
+Pagination
 
-# News List page-wise state persistance
+News List page-wise state persistance
 
-# In-App notification system
+In-App notification system
 
-# App analytics integration
+App analytics integration
 
-# Region-specific Content system
+Region-specific Content system
 
-# Optimised Permission Handling
+Optimised Permission Handling
 
-# Dependency Framework (Dagger-Hilt) integration
+Dependency Framework (Dagger-Hilt) integration
 
 
 
