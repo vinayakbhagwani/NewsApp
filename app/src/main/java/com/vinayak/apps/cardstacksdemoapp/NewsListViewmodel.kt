@@ -71,7 +71,7 @@ class NewsListViewmodel @Inject constructor(
                     } else {
                         val response = RetrofitInstance.createApi().getNewsData(
                             query = "sports",
-                            apiKey = "9ca9100a6da54f3297adb7d995257631"
+                            apiKey = "api_key"
                         )
                         withContext(Dispatchers.Main) {
                             if (response.isSuccessful) {
